@@ -1973,9 +1973,7 @@ Event GameContext::getShrine(Random &eventRngCopy) {  // todo fix, this is slow
     Event tempShrines[20];
 
     for (auto shrine : shrineList) {
-        if (shrine != Event::MATCH_AND_KEEP || !disableMatchAndKeep) {
-            tempShrines[tempLength++] = shrine;
-        }
+        tempShrines[tempLength++] = shrine;
     }
 
     for (auto event : specialOneTimeEventList) {

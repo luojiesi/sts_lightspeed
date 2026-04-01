@@ -192,6 +192,7 @@ namespace sts {
 
     namespace EventPools {
 
+        // NOTE_FOR_YOURSELF included at A0: isNoteForYourselfAvailable() returns true when ascension==0
         const std::array<Event,14> oneTimeEventsAsc0 {Event::OMINOUS_FORGE, Event::BONFIRE_SPIRITS, Event::DESIGNER_IN_SPIRE, Event::DUPLICATOR, Event::FACE_TRADER, Event::THE_DIVINE_FOUNTAIN, Event::KNOWING_SKULL, Event::LAB, Event::NLOTH, Event::NOTE_FOR_YOURSELF, Event::SECRET_PORTAL, Event::THE_JOUST, Event::WE_MEET_AGAIN, Event::THE_WOMAN_IN_BLUE };
         const std::array<Event,13> oneTimeEventsAsc15 {Event::OMINOUS_FORGE, Event::BONFIRE_SPIRITS, Event::DESIGNER_IN_SPIRE, Event::DUPLICATOR, Event::FACE_TRADER, Event::THE_DIVINE_FOUNTAIN, Event::KNOWING_SKULL, Event::LAB, Event::NLOTH, Event::SECRET_PORTAL, Event::THE_JOUST, Event::WE_MEET_AGAIN, Event::THE_WOMAN_IN_BLUE };
 
