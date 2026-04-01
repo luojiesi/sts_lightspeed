@@ -3,6 +3,8 @@
 //
 
 #include <iostream>
+#include <fstream>
+#include <filesystem>
 #include <chrono>
 #include <cstdint>
 #include <thread>
@@ -23,6 +25,7 @@
 #include "sim/RandomAgent.h"
 #include "sim/search/ScumSearchAgent2.h"
 #include "sim/search/SimpleAgent.h"
+#include "sim/search/DataCollectionAgent.h"
 
 #include "sim/search/BattleScumSearcher2.h"
 
@@ -215,6 +218,154 @@ void agentMt(int threadCount, std::uint64_t startSeed, int playoutCount) {
         << std::endl;
 }
 
+// --- Data collection ---
+
+struct CollectDataMtInfo {
+    std::mutex m;
+    std::uint64_t curSeed;
+    std::uint64_t seedEnd;
+    int ascension;
+    int simulationCount;
+    std::string outputDir;
+
+    std::int64_t winCount = 0;
+    std::int64_t lossCount = 0;
+    std::int64_t floorSum = 0;
+    std::int64_t gamesCompleted = 0;
+};
+
+void collectDataRunner(CollectDataMtInfo *info, int threadId) {
+    search::DataCollector collector(info->outputDir, threadId);
+
+    while (true) {
+        std::uint64_t seed;
+        {
+            std::scoped_lock lock(info->m);
+            if (info->curSeed >= info->seedEnd) break;
+            seed = info->curSeed++;
+        }
+
+        GameContext gc(CharacterClass::IRONCLAD, seed, info->ascension);
+        search::DataCollectionAgent agent;
+        agent.simulationCountBase = info->simulationCount;
+        agent.rng = std::default_random_engine(gc.seed);
+        agent.collector = &collector;
+
+        agent.playout(gc);
+
+        {
+            std::scoped_lock lock(info->m);
+            info->floorSum += gc.floorNum;
+            if (gc.outcome == sts::GameOutcome::PLAYER_VICTORY) {
+                ++info->winCount;
+            } else {
+                ++info->lossCount;
+            }
+            ++info->gamesCompleted;
+
+            if (info->gamesCompleted % 100 == 0) {
+                std::cout << "Progress: " << info->gamesCompleted
+                    << " W:" << info->winCount << " L:" << info->lossCount
+                    << std::endl;
+            }
+        }
+    }
+
+    collector.flush();
+}
+
+std::uint64_t findMaxCompletedSeed(const std::string &outputDir) {
+    namespace fs = std::filesystem;
+    std::uint64_t maxSeed = 0;
+    for (const auto &entry : fs::directory_iterator(outputDir)) {
+        const auto &path = entry.path();
+        if (path.filename().string().rfind("strategic_data_t", 0) != 0) continue;
+        if (path.extension() != ".csv") continue;
+
+        std::ifstream f(path);
+        if (!f.is_open()) continue;
+
+        std::string line;
+        std::string lastSeedLine;
+        // Skip header
+        std::getline(f, line);
+        while (std::getline(f, line)) {
+            lastSeedLine = line;
+        }
+        if (!lastSeedLine.empty()) {
+            // seed is the first comma-separated field
+            auto commaPos = lastSeedLine.find(',');
+            if (commaPos != std::string::npos) {
+                try {
+                    std::uint64_t seed = std::stoull(lastSeedLine.substr(0, commaPos));
+                    if (seed > maxSeed) maxSeed = seed;
+                } catch (...) {}
+            }
+        }
+    }
+    return maxSeed;
+}
+
+void collectData(int threadCount, int simCount, int ascension,
+                  std::uint64_t startSeed, int playoutCount, const std::string &outputDir) {
+    auto startTime = std::chrono::high_resolution_clock::now();
+
+    // Checkpoint: resume from last completed seed
+    std::uint64_t resumeSeed = startSeed;
+    if (std::filesystem::exists(outputDir)) {
+        std::uint64_t maxCompleted = findMaxCompletedSeed(outputDir);
+        if (maxCompleted >= startSeed) {
+            resumeSeed = maxCompleted + 1;
+            std::uint64_t done = resumeSeed - startSeed;
+            std::cout << "Resuming from seed " << resumeSeed
+                      << " (" << done << "/" << playoutCount << " games already done)\n";
+        }
+    }
+
+    CollectDataMtInfo info;
+    info.curSeed = resumeSeed;
+    info.seedEnd = startSeed + playoutCount;
+    info.ascension = ascension;
+    info.simulationCount = simCount;
+    info.outputDir = outputDir;
+
+    if (info.curSeed >= info.seedEnd) {
+        std::cout << "All games already completed!\n";
+        return;
+    }
+
+    std::vector<std::unique_ptr<std::thread>> threads;
+
+    if (threadCount == 1) {
+        collectDataRunner(&info, 0);
+    } else {
+        for (int tid = 0; tid < threadCount; ++tid) {
+            threads.emplace_back(new std::thread(collectDataRunner, &info, tid));
+        }
+        for (auto &t : threads) {
+            t->join();
+        }
+    }
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    double duration = std::chrono::duration<double>(endTime - startTime).count();
+
+    std::int64_t gamesThisRun = info.gamesCompleted;
+    std::int64_t totalDone = (resumeSeed - startSeed) + gamesThisRun;
+    std::cout << "\n=== Data Collection Complete ===\n"
+              << "This run: " << gamesThisRun << " games"
+              << " W:" << info.winCount << " L:" << info.lossCount
+              << " WinRate:" << (gamesThisRun > 0 ? 100.0 * info.winCount / gamesThisRun : 0) << "%"
+              << " AvgFloor:" << (gamesThisRun > 0 ? (double)info.floorSum / gamesThisRun : 0)
+              << "\nTotal progress: " << totalDone << "/" << playoutCount
+              << "\nOutput: " << outputDir
+              << "\nElapsed: " << duration << "s"
+              << " (" << (gamesThisRun > 0 ? (double)gamesThisRun / duration : 0) << " games/s)"
+              << std::endl;
+}
+
+// --- End data collection ---
+
 int mcts(int argc, const char *argv[]) {
     const auto saveFilePath = argv[2];
     const auto simulationCount = std::stoll(argv[3]);
@@ -322,6 +473,21 @@ int main(int argc, const char* argv[]) {
 
     } else if (command == "mcts_save") {
         return mcts(argc, argv);
+
+    } else if (command == "collect_data") {
+        // Usage: collect_data <threads> <simCount> <ascension> <startSeed> <playoutCount> <outputDir>
+        if (argc < 8) {
+            std::cout << "Usage: collect_data <threads> <simCount> <ascension> <startSeed> <playoutCount> <outputDir>" << std::endl;
+            return 1;
+        }
+        const int threadCount = std::stoi(argv[2]);
+        const int simCount = std::stoi(argv[3]);
+        const int ascension = std::stoi(argv[4]);
+        const std::uint64_t startSeed = std::stoull(argv[5]);
+        const int playoutCount = std::stoi(argv[6]);
+        const std::string outputDir(argv[7]);
+        collectData(threadCount, simCount, ascension, startSeed, playoutCount, outputDir);
+
     }
 
     //    printSizes();
