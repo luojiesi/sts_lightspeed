@@ -333,14 +333,29 @@ void search::DataCollectionAgent::cardSelectPolicy(GameContext &gc) {
 }
 
 void search::DataCollectionAgent::stepRewardsPolicy(GameContext &gc) {
+    // Neow (floor 0) has no COMBAT_REWARD screen in real game — skip reward logging
+    bool logRewards = gc.floorNum > 0;
     auto &r = gc.info.rewardsContainer;
+
     if (r.goldRewardCount > 0) {
+        if (logRewards) collector->logStrategicDecision(gc, "REWARD_GOLD", 0,
+            {{r.gold[0], 1.0f}});
         takeAction(gc, GameAction(GameAction::RewardsActionType::GOLD, 0));
     } else if (r.relicCount > 0) {
+        if (logRewards) collector->logStrategicDecision(gc, "REWARD_RELIC", 0,
+            {{static_cast<int>(r.relics[0]), 1.0f}});
         takeAction(gc, GameAction(GameAction::RewardsActionType::RELIC, 0));
     } else if (r.potionCount > 0) {
+        if (logRewards) collector->logStrategicDecision(gc, "REWARD_POTION", 0,
+            {{static_cast<int>(r.potions[0]), 1.0f}});
         takeAction(gc, GameAction(GameAction::RewardsActionType::POTION, 0));
+    } else if (r.sapphireKey || r.emeraldKey) {
+        int keyType = r.emeraldKey ? 1 : 2;  // 1=emerald, 2=sapphire
+        if (logRewards) collector->logStrategicDecision(gc, "REWARD_KEY", 0,
+            {{keyType, 1.0f}});
+        takeAction(gc, GameAction(GameAction::RewardsActionType::KEY));
     } else if (r.cardRewardCount == 0) {
+        if (logRewards) collector->logStrategicDecision(gc, "REWARD_SKIP", 0, {});
         takeAction(gc, GameAction(GameAction::RewardsActionType::SKIP));
     } else {
         weightedCardRewardPolicy(gc);
