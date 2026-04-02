@@ -29,7 +29,7 @@ void BattleContext::init(const GameContext &gc, MonsterEncounter encounterToInit
     aiRng = startRandom;
     monsterHpRng = startRandom;
     shuffleRng = startRandom;
-    cardRandomRng = startRandom;
+    cardRandomRng = gc.cardRandomRng;  // persist across battles, like real STS
     miscRng = gc.miscRng;
     potionRng = gc.potionRng;
 

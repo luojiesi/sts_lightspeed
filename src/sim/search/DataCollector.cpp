@@ -86,11 +86,11 @@ void DataCollector::writeBattleHeader() {
     // Pile sizes (3)
     h << ",draw_pile_size,discard_pile_size,exhaust_pile_size";
 
-    // Turn, floor, act (3)
-    h << ",turn,floor_num,act";
+    // Turn, floor, act, RNG counters
+    h << ",turn,floor_num,act,card_rng_counter,shuffle_rng_counter";
 
     // MCTS results: num_edges, then variable-length edges, then chosen action
-    h << ",num_edges,edge_data,chosen_action,select_card_info";
+    h << ",num_edges,edge_data,chosen_action,select_card_info,draw_pile,discard_pile";
 
     h << "\n";
     battleFile << h.str();
@@ -176,11 +176,13 @@ void DataCollector::logBattleDecision(const BattleContext &bc, const BattleScumS
         << "," << bc.cards.discardPile.size()
         << "," << bc.cards.exhaustPile.size();
 
-    // Turn, floor, act (derive act from floor number)
+    // Turn, floor, act, RNG counters
     int act = bc.floorNum <= 17 ? 1 : (bc.floorNum <= 34 ? 2 : 3);
     row << "," << bc.turn
         << "," << bc.floorNum
-        << "," << act;
+        << "," << act
+        << "," << bc.cardRandomRng.counter
+        << "," << bc.shuffleRng.counter;
 
     // MCTS edges: encode as semicolon-separated within quotes
     const auto &rootNode = searcher.root;
@@ -268,6 +270,19 @@ void DataCollector::logBattleDecision(const BattleContext &bc, const BattleScumS
     } else {
         row << ",";
     }
+
+    // Draw pile and discard pile (exact order for reshuffle debugging)
+    row << ",\"";
+    for (int i = 0; i < (int)bc.cards.drawPile.size(); ++i) {
+        if (i > 0) row << ";";
+        row << static_cast<int>(bc.cards.drawPile[i].id);
+    }
+    row << "\",\"";
+    for (int i = 0; i < (int)bc.cards.discardPile.size(); ++i) {
+        if (i > 0) row << ";";
+        row << static_cast<int>(bc.cards.discardPile[i].id);
+    }
+    row << "\"";
 
     row << "\n";
     battleFile << row.str();
