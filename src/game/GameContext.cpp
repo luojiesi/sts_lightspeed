@@ -1753,8 +1753,7 @@ MonsterEncounter GameContext::getEliteForRoomCreation() {
 }
 
 void GameContext::addPotionRewards(Rewards &r) {
-    // assume if in a monsters room, they didnt escape
-    int chance = 40 + potionChance;
+    int chance = (curRoom == Room::MONSTER && info.monstersEscaped) ? potionChance : 40 + potionChance;
 
     if (hasRelic(RelicId::WHITE_BEAST_STATUE)) {
         chance = 100;
@@ -1918,11 +1917,13 @@ void GameContext::openTreasureRoomChest() {
 
 Rewards GameContext::createCombatReward() {
     Rewards reward;
-    int goldAmt = treasureRng.random(10, 20);
-    if (hasRelic(RelicId::GOLDEN_IDOL)) {
-        goldAmt += std::round(static_cast<float>(goldAmt) * 0.25f);
+    if (!info.monstersEscaped) {
+        int goldAmt = treasureRng.random(10, 20);
+        if (hasRelic(RelicId::GOLDEN_IDOL)) {
+            goldAmt += std::round(static_cast<float>(goldAmt) * 0.25f);
+        }
+        reward.addGold(goldAmt);
     }
-    reward.addGold(goldAmt);
     addPotionRewards(reward);
     reward.addCardReward(createCardReward(Room::MONSTER)); // TODO Prayer wheel
     if (hasRelic(RelicId::PRAYER_WHEEL)) {

@@ -493,6 +493,7 @@ void BattleContext::exitBattle(GameContext &g) const {
     updateCardsOnExit(g.deck);
 
     g.info.stolenGold = 0;
+    g.info.monstersEscaped = false;
     if (requiresStolenGoldCheck()) {
         for (int i = 0; i < monsters.monsterCount; ++i) {
             const auto &m = monsters.arr[i];
@@ -501,6 +502,9 @@ void BattleContext::exitBattle(GameContext &g) const {
             const bool escaped = m.curHp > 0 && (m.moveHistory[0] == MMID::LOOTER_ESCAPE ||
                                                  m.moveHistory[0] == MMID::MUGGER_ESCAPE);
 
+            if (escaped) {
+                g.info.monstersEscaped = true;
+            }
             if (canHaveStolenGold && !escaped) {
                 g.info.stolenGold += m.miscInfo;
             }
