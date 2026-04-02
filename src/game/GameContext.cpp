@@ -3080,7 +3080,9 @@ void GameContext::chooseEventOption(int idx) {
                 enterBattle(MonsterEncounter::MUSHROOMS_EVENT);
 
             } else if (idx == 1) {
-                obtainGold(unfavorable ? 50 : 99);
+                // Heal 25% maxHP + obtain a curse
+                playerHeal(static_cast<int>(static_cast<float>(maxHp) * 0.25f));
+                deck.obtain(*this, {CardId::PARASITE});
                 regainControl();
 
             } else {
